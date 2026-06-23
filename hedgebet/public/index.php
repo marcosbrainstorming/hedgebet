@@ -1,8 +1,5 @@
 <?php
-/**
- * HedgeBet - Simulador Avançado e Entrada de Operações
- * Arquivo: public/index.php
- */
+require_once '../src/Helpers/trava.php';
 
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
@@ -27,19 +24,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
         $oddFavorito = (float)$_POST['odd_favorito_form'];
         $oddEmpate = (float)$_POST['odd_empate_form'];
         $stakeTotal = (float)$_POST['stake_total_form'];
+        $prioridade = isset($_POST['prioridade_form']) ? $_POST['prioridade_form'] : 'equilibrado';
 
-        // Algoritmo de Cobertura com Viés no Empate (60%)
-        $pesoEmpate = 0.60;
+        // ==========================================================================
+        // BACKEND: ALGORITMO DE DISTRIBUIÇÃO ASSIMÉTRICA CONFIGURÁVEL
+        // ==========================================================================
         $probFav = 1 / $oddFavorito;
         $probEmp = 1 / $oddEmpate;
         $somaProb = $probFav + $probEmp;
 
-        $fatorFav = ($probFav / $somaProb) * (1 - ($pesoEmpate - 0.5));
-        $fatorEmp = ($probEmp / $somaProb) * (1 + ($pesoEmpate - 0.5));
-        $totalFatores = $fatorFav + $fatorEmp;
+        $apostaFav = 0;
+        $apostaEmp = 0;
 
-        $apostaFav = round((($fatorFav / $totalFatores) * $stakeTotal), 2);
-        $apostaEmp = round(($stakeTotal - $apostaFav), 2);
+        if ($somaProb < 1) {
+            // Há margem de lucro real (Surebet)
+            if ($prioridade === 'favorito') {
+                // Prioridade Favorito: Cobre o empate (retorno = stake) e joga o lucro no favorito
+                $apostaEmp = round($stakeTotal / $oddEmpate, 2);
+                $apostaFav = round($stakeTotal - $apostaEmp, 2);
+            } elseif ($prioridade === 'empate') {
+                // Prioridade Empate: Cobre o favorito (retorno = stake) e joga o lucro no empate
+                $apostaFav = round($stakeTotal / $oddFavorito, 2);
+                $apostaEmp = round($stakeTotal - $apostaFav, 2);
+            } else {
+                // Equilibrado: Arbitragem pura tradicional
+                $apostaFav = round(($probFav / $somaProb) * $stakeTotal, 2);
+                $apostaEmp = round(($probEmp / $somaProb) * $stakeTotal, 2);
+                
+                $diferenca = $stakeTotal - ($apostaFav + $apostaEmp);
+                if ($diferenca != 0) {
+                    $apostaFav = round($apostaFav + $diferenca, 2);
+                }
+            }
+        } else {
+            // PLANO B (Mercado sem margem): Força proteção máxima no empate para mitigar danos
+            $apostaEmp = round($stakeTotal / $oddEmpate, 2);
+            $apostaFav = round($stakeTotal - $apostaEmp, 2);
+        }
 
         // Bloco de inserção com suporte a múltiplas estruturas de colunas de banco
         $gravou = false;
@@ -63,7 +84,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
                     break;
                 }
             } catch (PDOException $e) {
-                // Continua para a próxima tentativa se falhar por nome de coluna
                 continue;
             }
         }
@@ -107,6 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
             <a class="nav-link active" href="index.php">Simulador</a>
             <a class="nav-link" href="operacoes.php">Diário de Apostas</a>
             <a class="nav-link" href="dashboard.php">Dashboard</a>
+            <a class="nav-link text-danger fw-bold" href="logout.php"><i class="fa-solid fa-right-from-bracket me-1"></i> Sair</a>
         </div>
     </div>
 </nav>
@@ -128,15 +149,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
                 <div class="card-body">
                     <form action="index.php" method="POST" id="formSimulador">
                         <input type="hidden" name="acao" value="registrar_operacao">
+                        <input type="hidden" name="prioridade_form" id="prioridadeForm" value="equilibrado">
                         
                         <div class="row g-2 mb-3">
                             <div class="col-6">
                                 <label class="form-label small fw-bold text-muted">Time Casa</label>
-                                <input type="text" class="form-control" name="time_casa" placeholder="Ex: Real Madrid" required>
+                                <input type="text" class="form-control" name="time_casa" placeholder="Ex: Portugal" required>
                             </div>
                             <div class="col-6">
                                 <label class="form-label small fw-bold text-muted">Time Visitante</label>
-                                <input type="text" class="form-control" name="time_visitante" placeholder="Ex: Barcelona" required>
+                                <input type="text" class="form-control" name="time_visitante" placeholder="Ex: UZB" required>
                             </div>
                         </div>
 
@@ -148,12 +170,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
                         <hr>
 
                         <div class="mb-3">
-                            <label for="oddFavorito" class="form-label fw-bold">ODD do Favorito (Back Vitória)</label>
+                            <label class="form-label fw-bold">ODD do Favorito (Back Vitória)</label>
                             <input type="number" step="0.01" min="1.01" class="form-control form-control-lg" name="odd_favorito_form" id="oddFavorito" value="2.22" required>
                         </div>
                         
                         <div class="mb-3">
-                            <label for="oddEmpate" class="form-label fw-bold">ODD da Cobertura (Empate)</label>
+                            <label class="form-label fw-bold">ODD da Cobertura (Empate)</label>
                             <input type="number" step="0.01" min="1.01" class="form-control form-control-lg" name="odd_empate_form" id="oddEmpate" value="3.60" required>
                         </div>
 
@@ -174,12 +196,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
 
         <div class="col-md-7">
             <div class="card shadow-sm h-100">
-                <div class="card-header py-3">
+                <div class="card-header py-3 d-flex flex-column gap-2">
                     <h5 class="card-title mb-0"><i class="fa-solid fa-chart-pie me-2"></i>Análise de Distribuição Assimétrica</h5>
+                    
+                    <div class="btn-group w-100 mt-1" role="group" aria-label="Alvo do Lucro Principal">
+                        <input type="radio" class="btn-check" name="btnPrioridade" id="prioridadeEquilibrado" value="equilibrado" checked autocomplete="off">
+                        <label class="btn btn-outline-light btn-sm fw-semibold" for="prioridadeEquilibrado">⚖️ Equilibrado</label>
+
+                        <input type="radio" class="btn-check" name="btnPrioridade" id="prioridadeFavorito" value="favorito" autocomplete="off">
+                        <label class="btn btn-outline-light btn-sm fw-semibold" for="prioridadeFavorito">🏆 Focar no Favorito</label>
+
+                        <input type="radio" class="btn-check" name="btnPrioridade" id="prioridadeEmpate" value="empate" autocomplete="off">
+                        <label class="btn btn-outline-light btn-sm fw-semibold" for="prioridadeEmpate">🤝 Focar no Empate</label>
+                    </div>
                 </div>
+                
                 <div class="card-body d-flex flex-column justify-content-between">
                     
-                    <div class="card result-card result-green p-3 mb-3 shadow-sm">
+                    <div class="card result-card result-green p-3 mb-3 shadow-sm" id="cardFav">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <span class="fw-bold text-dark fs-5"><i class="fa-solid fa-trophy text-warning me-2"></i>Cenário: Vitória do Favorito</span>
                             <span class="badge bg-success" id="porcentagemFav">+0.00%</span>
@@ -200,7 +234,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
                         </div>
                     </div>
 
-                    <div class="card result-card result-green p-3 mb-3 shadow-sm">
+                    <div class="card result-card result-green p-3 mb-3 shadow-sm" id="cardEmp">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <span class="fw-bold text-dark fs-5"><i class="fa-solid fa-handshake text-primary me-2"></i>Cenário: Cobertura no Empate</span>
                             <span class="badge bg-success" id="porcentagemEmp">+0.00%</span>
@@ -224,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
                     <div class="alert alert-info mb-0 d-flex align-items-center">
                         <i class="fa-solid fa-shield-halved fs-4 me-3"></i>
                         <div>
-                            <strong>Blindagem de Capital Ativa:</strong> As entradas sugeridas cobrem o risco operacional distribuindo lucros de forma inteligente baseado no algoritmo de volatilidade.
+                            <strong>Blindagem de Capital Dinâmica:</strong> Os pesos e cálculos mudam dinamicamente baseados na sua convicção de mercado selecionada no seletor acima.
                         </div>
                     </div>
                 </div>
@@ -240,27 +274,59 @@ document.addEventListener("DOMContentLoaded", function() {
     const stakeInput = document.getElementById("stakeTotal");
     const btnMais = document.getElementById("btnMais");
     const btnMenos = document.getElementById("btnMenos");
+    const prioridadeHidden = document.getElementById("prioridadeForm");
+
+    function getPrioridadeAtiva() {
+        return document.querySelector('input[name="btnPrioridade"]:checked').value;
+    }
 
     function recalcularSimulacao() {
         const oddFav = parseFloat(oddFavInput.value) || 0;
         const oddEmp = parseFloat(oddEmpInput.value) || 0;
         const stakeTotal = parseFloat(stakeInput.value) || 0;
+        const prioridade = getPrioridadeAtiva();
+
+        // Atualiza o input oculto para mandar o valor certo pro PHP salvar
+        prioridadeHidden.value = prioridade;
 
         if (oddFav <= 1 || oddEmp <= 1 || stakeTotal <= 0) return;
 
-        // Execução do algoritmo matemático exato
-        const pesoEmpate = 0.60;
         const probFav = 1 / oddFav;
         const probEmp = 1 / oddEmp;
         const somaProb = probFav + probEmp;
 
-        const fatorFav = (probFav / somaProb) * (1 - (pesoEmpate - 0.5));
-        const fatorEmp = (probEmp / somaProb) * (1 + (pesoEmpate - 0.5));
-        const totalFatores = fatorFav + fatorEmp;
+        let apostaFav = 0;
+        let apostaEmp = 0;
+        let mercadoSemMargem = false;
 
-        let apostaFav = Math.round(((fatorFav / totalFatores) * stakeTotal) * 100) / 100;
-        let apostaEmp = Math.round((stakeTotal - apostaFav) * 100) / 100;
+        if (somaProb < 1) {
+            // ARBITRAGEM EXISTENTE: Aplica a regra baseada na convicção escolhida
+            if (prioridade === 'favorito') {
+                // Focar no Favorito: Cobre o empate e manda todo o resto do lucro para o favorito
+                apostaEmp = Math.round((stakeTotal / oddEmp) * 100) / 100;
+                apostaFav = Math.round((stakeTotal - apostaEmp) * 100) / 100;
+            } else if (prioridade === 'empate') {
+                // Focar no Empate: Cobre o favorito e manda todo o resto do lucro para o empate
+                apostaFav = Math.round((stakeTotal / oddFav) * 100) / 100;
+                apostaEmp = Math.round((stakeTotal - apostaFav) * 100) / 100;
+            } else {
+                // Equilibrado: Distribuição proporcional inversa tradicional (Lucro Igualitário)
+                apostaFav = Math.round(((probFav / somaProb) * stakeTotal) * 100) / 100;
+                apostaEmp = Math.round(((probEmp / somaProb) * stakeTotal) * 100) / 100;
+                
+                const dif = stakeTotal - (apostaFav + apostaEmp);
+                if (dif !== 0) {
+                    apostaFav = Math.round((apostaFav + dif) * 100) / 100;
+                }
+            }
+        } else {
+            // MERCADO SEM MARGEM: Ativa o Plano B de proteção de danos independente da escolha
+            mercadoSemMargem = true;
+            apostaEmp = Math.ceil((stakeTotal / oddEmp) * 100) / 100; 
+            apostaFav = Math.round((stakeTotal - apostaEmp) * 100) / 100;
+        }
 
+        // Cálculos de Retorno e Lucro Líquido
         const retornoFav = Math.round((apostaFav * oddFav) * 100) / 100;
         const lucroFav = Math.round((retornoFav - stakeTotal) * 100) / 100;
         const porcFav = Math.round((lucroFav / stakeTotal) * 10000) / 100;
@@ -269,7 +335,7 @@ document.addEventListener("DOMContentLoaded", function() {
         const lucroEmp = Math.round((retornoEmp - stakeTotal) * 100) / 100;
         const porcEmp = Math.round((lucroEmp / stakeTotal) * 10000) / 100;
 
-        // Renderização dos campos na tela
+        // Injeta os dados na tela formatados
         document.getElementById("txtApostaFav").innerText = `R$ ${apostaFav.toFixed(2).replace('.', ',')}`;
         document.getElementById("txtRetornoFav").innerText = `R$ ${retornoFav.toFixed(2).replace('.', ',')}`;
         document.getElementById("txtLucroFav").innerText = `R$ ${lucroFav.toFixed(2).replace('.', ',')}`;
@@ -279,18 +345,32 @@ document.addEventListener("DOMContentLoaded", function() {
         document.getElementById("txtRetornoEmp").innerText = `R$ ${retornoEmp.toFixed(2).replace('.', ',')}`;
         document.getElementById("txtLucroEmp").innerText = `R$ ${lucroEmp.toFixed(2).replace('.', ',')}`;
         document.getElementById("porcentagemEmp").innerText = `${lucroEmp >= 0 ? '+' : ''}${porcEmp.toFixed(2)}%`;
+        
+        // Estilização dinâmica inteligente de segurança
+        if (mercadoSemMargem) {
+            document.getElementById("porcentagemFav").className = "badge bg-secondary";
+            document.getElementById("porcentagemEmp").className = "badge bg-secondary";
+            document.querySelectorAll('.result-card').forEach(el => el.style.borderLeftColor = '#64748b');
+        } else {
+            // Se houver margem, define cores normais baseadas em lucro positivo ou nulo/negativo
+            document.getElementById("porcentagemFav").className = lucroFav >= 0 ? "badge bg-success" : "badge bg-danger";
+            document.getElementById("porcentagemEmp").className = lucroEmp >= 0 ? "badge bg-success" : "badge bg-danger";
+            document.querySelectorAll('.result-card').forEach(el => el.style.borderLeftColor = '#10b981');
+        }
     }
 
-    // Handlers dos botões de ajuste rápido de stake (+/- R$5)
+    // Escuta cliques nos botões de alternância de prioridade
+    document.querySelectorAll('input[name="btnPrioridade"]').forEach(radio => {
+        radio.addEventListener("change", recalcularSimulacao);
+    });
+
     btnMais.addEventListener("click", function() { stakeInput.value = parseInt(stakeInput.value || 0) + 5; recalcularSimulacao(); });
     btnMenos.addEventListener("click", function() { let atual = parseInt(stakeInput.value || 0); if (atual > 5) { stakeInput.value = atual - 5; recalcularSimulacao(); } });
     
-    // Escutas de alterações em tempo real
     oddFavInput.addEventListener("input", recalcularSimulacao);
     oddEmpInput.addEventListener("input", recalcularSimulacao);
     stakeInput.addEventListener("input", recalcularSimulacao);
 
-    // Inicialização forçada
     recalcularSimulacao();
 });
 </script>

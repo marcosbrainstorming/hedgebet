@@ -1,8 +1,5 @@
 <?php
-/**
- * HedgeBet - Dashboard Financeiro & Gestão de Saques Pessoais
- * Arquivo: public/dashboard.php
- */
+require_once '../src/Helpers/trava.php';
 
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
@@ -17,7 +14,6 @@ $db = $database->getConnection();
 $mensagemStatus = "";
 $tipoAlerta = "success";
 
-// Tenta criar a tabela de saques caso ela não exista no seu banco 'hedgebet'
 try {
     $db->exec("CREATE TABLE IF NOT EXISTS saques_caixa (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -25,11 +21,8 @@ try {
         descricao VARCHAR(255) NOT NULL,
         data_saque TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
-} catch (PDOException $e) {
-    // Tabela já existe ou erro silencioso
-}
+} catch (PDOException $e) {}
 
-// PROCESSA O CADASTRO DE UM NOVO SAQUE PESSOAL
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['acao'] === 'registrar_saque') {
     try {
         $valorSaque = (float)$_POST['valor_saque'];
@@ -42,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
             $stmtSaque->bindParam(':descricao', $descricaoSaque);
 
             if ($stmtSaque->execute()) {
-                $mensagemStatus = "Saque pessoal de <strong>R$ " . number_format($valorSaque, 2, ',', '.') . "</strong> registrado com sucesso e deduzido do saldo total!";
+                $mensagemStatus = "Saque pessoal de <strong>R$ " . number_format($valorSaque, 2, ',', '.') . "</strong> registrado com sucesso!";
                 $tipoAlerta = "success";
             }
         } else {
@@ -55,27 +48,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
     }
 }
 
-// 1. CÁLCULO DAS APOSTAS (Entradas e Retornos Técnicos)
 $totalInvestido = 0.00;
 $totalRetornado = 0.00;
 $lucroBrutoApostas = 0.00;
 
 try {
-    // Soma tudo o que foi colocado nas duas colunas de entrada
     $queryApostas = "SELECT SUM(aposta_favorito + aposta_empate) as total_investido, SUM(valor_retornado) as total_retornado FROM apostas WHERE status = 'Finalizada'";
     $stmtA = $db->query($queryApostas);
     $resA = $stmtA->fetch(PDO::FETCH_ASSOC);
-    
     if ($resA) {
         $totalInvestido = (float)$resA['total_investido'];
         $totalRetornado = (float)$resA['total_retornado'];
         $lucroBrutoApostas = $totalRetornado - $totalInvestido;
     }
-} catch (PDOException $e) {
-    // Erro ao buscar apostas
-}
+} catch (PDOException $e) {}
 
-// 2. CÁLCULO DOS SAQUES TOTAIS (Retiradas para conta pessoal)
 $totalSaquesPessoais = 0.00;
 try {
     $queryTotalSaques = "SELECT SUM(valor) as total_saques FROM saques_caixa";
@@ -84,21 +71,15 @@ try {
     if ($resS) {
         $totalSaquesPessoais = (float)$resS['total_saques'];
     }
-} catch (PDOException $e) {
-    // Erro ao buscar saques
-}
+} catch (PDOException $e) {}
 
-// 3. SALDO ATUAL DO SISTEMA (Banca disponível considerando as retiradas feitas)
 $bancaDisponivelAtual = $lucroBrutoApostas - $totalSaquesPessoais;
 
-// BUSCA HISTÓRICO DE SAQUES PARA EXIBIR NA TELA
 $historicoSaques = [];
 try {
     $queryHist = "SELECT id, valor, descricao, data_saque FROM saques_caixa ORDER BY id DESC LIMIT 5";
     $historicoSaques = $db->query($queryHist)->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    // Erro ao buscar histórico
-}
+} catch (PDOException $e) {}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -124,6 +105,7 @@ try {
             <a class="nav-link" href="index.php">Simulador</a>
             <a class="nav-link" href="operacoes.php">Diário de Apostas</a>
             <a class="nav-link active" href="dashboard.php">Dashboard</a>
+            <a class="nav-link text-danger fw-bold" href="logout.php"><i class="fa-solid fa-right-from-bracket me-1"></i> Sair</a>
         </div>
     </div>
 </nav>
@@ -192,7 +174,7 @@ try {
                     <tbody>
                         <?php if (empty($historicoSaques)): ?>
                             <tr>
-                                <td colspan="3" class="text-center text-muted py-4">Nenhum saque pessoal realizado até o momento.</td>
+                                <td colspan="3" class="text-center text-muted py-4">Nenhum Documento de saque encontrado.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($historicoSaques as $s): ?>
@@ -214,22 +196,19 @@ try {
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title id="modalSaqueLabel" fw-bold"><i class="fa-solid fa-money-bill-transfer me-2"></i>Registrar Saque de Lucro</h5>
+                <h5 class="modal-title" id="modalSaqueLabel fw-bold"><i class="fa-solid fa-money-bill-transfer me-2"></i>Registrar Saque de Lucro</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form action="dashboard.php" method="POST">
                 <div class="modal-body">
                     <input type="hidden" name="acao" value="registrar_saque">
-                    
                     <div class="mb-3">
                         <label for="valor_saque" class="form-label fw-semibold">Valor do Saque (R$)</label>
                         <div class="input-group">
                             <span class="input-group-text bg-light fw-bold">R$</span>
                             <input type="number" step="0.01" min="0.01" class="form-control" id="valor_saque" name="valor_saque" placeholder="0,00" required>
                         </div>
-                        <div class="form-text">Este valor será deduzido do Saldo Geral do sistema.</div>
                     </div>
-
                     <div class="mb-3">
                         <label for="descricao_saque" class="form-label fw-semibold">Descrição / Motivo</label>
                         <input type="text" class="form-control" id="descricao_saque" name="descricao_saque" placeholder="Ex: Transferência para minha conta corrente" required>
