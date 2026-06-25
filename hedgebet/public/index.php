@@ -173,6 +173,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
                             <label class="form-label fw-bold">ODD do Favorito (Back Vitória)</label>
                             <input type="number" step="0.01" min="1.01" class="form-control form-control-lg" name="odd_favorito_form" id="oddFavorito" value="2.22" required>
                         </div>
+                        <div class="mb-3 border p-2 rounded bg-light">
+    <label class="form-label fw-bold text-primary">
+        ODD Chance Dupla (Casa)
+    </label>
+
+    <input
+        type="number"
+        step="0.01"
+        min="1.01"
+        class="form-control"
+        name="odd_casa_form"
+        id="oddCasa"
+        value="1.26"
+        required
+    >
+
+    <small class="text-muted">
+        Benchmark para superar o retorno da casa.
+    </small>
+</div>
                         
                         <div class="mb-3">
                             <label class="form-label fw-bold">ODD da Cobertura (Empate)</label>
@@ -261,6 +281,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
                             <strong>Blindagem de Capital Dinâmica:</strong> Os pesos e cálculos mudam dinamicamente baseados na sua convicção de mercado selecionada no seletor acima.
                         </div>
                     </div>
+                    <div class="card p-3 mt-3 shadow-sm" id="cardValidacao">
+    <h6 class="fw-bold">
+        <i class="fa-solid fa-shield-halved me-2"></i>
+        Status de Eficiência
+    </h6>
+    
+        <div id="statusMensagem" class="alert alert-info mb-0">Aguardando cálculo...</div>
+    </div>
+</div>
                 </div>
             </div>
         </div>

@@ -1,93 +1,108 @@
-/**
- * HedgeBet - Motores de Interação e Cálculos em Tempo Real
- * Arquivo: public/js/main.js
- */
-
 document.addEventListener("DOMContentLoaded", function() {
-    // Captura os elementos da tela do Simulador (index.php)
+    // Referências aos elementos
     const oddFavInput = document.getElementById("oddFavorito");
     const oddEmpInput = document.getElementById("oddEmpate");
+    const oddCasaInput = document.getElementById("oddCasa"); // Novo campo
     const stakeInput = document.getElementById("stakeTotal");
-    const btnMais = document.getElementById("btnMais");
-    const btnMenos = document.getElementById("btnMenos");
+    const statusMsg = document.getElementById("statusMensagem"); // A div que não está mudando
+    const prioridadeHidden = document.getElementById("prioridadeForm");
 
-    // Verifica se os elementos existem na página atual antes de rodar o script
-    if (!oddFavInput || !oddEmpInput || !stakeInput) return;
-
-    /**
-     * Formata números float no padrão de moeda brasileiro (R$ X.XXX,XX)
-     */
-    function formatarMoedaBR(valor) {
-        return "R$ " + valor.toFixed(2).replace(".", ",").replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+    function getPrioridadeAtiva() {
+        return document.querySelector('input[name="btnPrioridade"]:checked').value;
     }
 
-    /**
-     * Executa a distribuição assimétrica baseada na sua tese de investimento
-     */
     function recalcularSimulacao() {
+        // Leitura dos valores
         const oddFav = parseFloat(oddFavInput.value) || 0;
         const oddEmp = parseFloat(oddEmpInput.value) || 0;
+        const oddCasa = parseFloat(oddCasaInput.value) || 0;
         const stakeTotal = parseFloat(stakeInput.value) || 0;
+        const prioridade = getPrioridadeAtiva();
 
-        // Validação mínima de segurança
+        prioridadeHidden.value = prioridade;
         if (oddFav <= 1 || oddEmp <= 1 || stakeTotal <= 0) return;
 
-        // Viés estratégico do HedgeBet: Peso de 60% focado em extrair lucro do empate
-        const pesoEmpate = 0.60;
+        // Cálculos
         const probFav = 1 / oddFav;
         const probEmp = 1 / oddEmp;
         const somaProb = probFav + probEmp;
+        let apostaFav = 0, apostaEmp = 0;
 
-        // Distribuição de pesos baseada no viés
-        const fatorFav = (probFav / somaProb) * (1 - (pesoEmpate - 0.5));
-        const fatorEmp = (probEmp / somaProb) * (1 + (pesoEmpate - 0.5));
-        const totalFatores = fatorFav + fatorEmp;
+        if (somaProb < 1) {
+            if (prioridade === 'favorito') {
+                apostaEmp = Math.round((stakeTotal / oddEmp) * 100) / 100;
+                apostaFav = Math.round((stakeTotal - apostaEmp) * 100) / 100;
+            } else if (prioridade === 'empate') {
+                apostaFav = Math.round((stakeTotal / oddFav) * 100) / 100;
+                apostaEmp = Math.round((stakeTotal - apostaFav) * 100) / 100;
+            } else {
+                apostaFav = Math.round(((probFav / somaProb) * stakeTotal) * 100) / 100;
+                apostaEmp = Math.round(((probEmp / somaProb) * stakeTotal) * 100) / 100;
+            }
+        } else {
+            apostaEmp = Math.ceil((stakeTotal / oddEmp) * 100) / 100;
+            apostaFav = Math.round((stakeTotal - apostaEmp) * 100) / 100;
+        }
 
-        // Define as frações exatas das stakes
-        let apostaFav = Math.round(((fatorFav / totalFatores) * stakeTotal) * 100) / 100;
-        let apostaEmp = Math.round((stakeTotal - apostaFav) * 100) / 100;
+        const lucroFav = Math.round(((apostaFav * oddFav) - stakeTotal) * 100) / 100;
+        const lucroEmp = Math.round(((apostaEmp * oddEmp) - stakeTotal) * 100) / 100;
 
-        // Projeções para o cenário: Vitória do Favorito
-        const retornoFav = Math.round((apostaFav * oddFav) * 100) / 100;
-        const lucroFav = Math.round((retornoFav - stakeTotal) * 100) / 100;
-        const porcFav = ((lucroFav / stakeTotal) * 100).toFixed(2);
+        // Atualiza interface
+        document.getElementById("txtApostaFav").innerText = `R$ ${apostaFav.toFixed(2).replace('.', ',')}`;
+        document.getElementById("txtLucroFav").innerText = `R$ ${lucroFav.toFixed(2).replace('.', ',')}`;
+        document.getElementById("txtApostaEmp").innerText = `R$ ${apostaEmp.toFixed(2).replace('.', ',')}`;
+        document.getElementById("txtLucroEmp").innerText = `R$ ${lucroEmp.toFixed(2).replace('.', ',')}`;
 
-        // Projeções para o cenário: Empate
-        const retornoEmp = Math.round((apostaEmp * oddEmp) * 100) / 100;
-        const lucroEmp = Math.round((retornoEmp - stakeTotal) * 100) / 100;
-        const porcEmp = ((lucroEmp / stakeTotal) * 100).toFixed(2);
+        // Lógica de Status de Eficiência
+        const valorX = stakeTotal * oddCasa;
+        const lucroCobertura = Math.max(lucroFav, lucroEmp);
 
-        // Atualização dinâmica dos elementos HTML na interface
-        document.getElementById("txtApostaFav").innerText = formatarMoedaBR(apostaFav);
-        document.getElementById("txtRetornoFav").innerText = formatarMoedaBR(retornoFav);
-        document.getElementById("txtLucroFav").innerText = formatarMoedaBR(lucroFav);
-        document.getElementById("porcentagemFav").innerText = `${lucroFav >= 0 ? '+' : ''}${porcFav}%`;
-
-        document.getElementById("txtApostaEmp").innerText = formatarMoedaBR(apostaEmp);
-        document.getElementById("txtRetornoEmp").innerText = formatarMoedaBR(retornoEmp);
-        document.getElementById("txtLucroEmp").innerText = formatarMoedaBR(lucroEmp);
-        document.getElementById("porcentagemEmp").innerText = `${lucroEmp >= 0 ? '+' : ''}${porcEmp}%`;
+        if (statusMsg) {
+            if (lucroCobertura >= (valorX - stakeTotal)) {
+                statusMsg.className = "alert alert-success mb-0";
+                statusMsg.innerHTML = "<strong>Operação Vantajosa!</strong> Supera a casa ✅";
+            } else {
+                statusMsg.className = "alert alert-warning mb-0";
+                statusMsg.innerHTML = "<strong>Ineficiente:</strong> Abaixo da casa ❌";
+            }
+        }
     }
 
-    // Ações dos botões + e - (Sobe/desce o aporte de 5 em 5 reais)
-    btnMais.addEventListener("click", function() {
-        stakeInput.value = parseInt(stakeInput.value || 0) + 5;
-        recalcularSimulacao();
+    // listeners para garantir que qualquer mudança dispare o cálculo
+    [oddFavInput, oddEmpInput, oddCasaInput, stakeInput].forEach(el => {
+        el.addEventListener("input", recalcularSimulacao);
+    });
+    document.querySelectorAll('input[name="btnPrioridade"]').forEach(r => {
+        r.addEventListener("change", recalcularSimulacao);
     });
 
-    btnMenos.addEventListener("click", function() {
-        let atual = parseInt(stakeInput.value || 0);
-        if (atual > 5) {
-            stakeInput.value = atual - 5;
-            recalcularSimulacao();
-        }
-    });
-
-    // Escuta alterações de digitação direta nos campos
-    oddFavInput.addEventListener("input", recalcularSimulacao);
-    oddEmpInput.addEventListener("input", recalcularSimulacao);
-    stakeInput.addEventListener("input", recalcularSimulacao);
-
-    // Roda o cálculo inicial assim que a tela abre
+    // Cálculo inicial
     recalcularSimulacao();
 });
+// ... (restante do código) ...
+
+    function recalcularSimulacao() {
+        const oddFav = parseFloat(oddFavInput.value) || 0;
+        const oddEmp = parseFloat(oddEmpInput.value) || 0;
+        const oddCasa = parseFloat(oddCasaInput.value) || 0;
+        const stakeTotal = parseFloat(stakeInput.value) || 0;
+
+        // DEBUG: Isso vai aparecer no seu F12 -> Console
+        console.log("Calculando... OddCasa:", oddCasa, "Stake:", stakeTotal);
+
+        const valorX = stakeTotal * oddCasa;
+        // ... (resto do cálculo) ...
+
+        if (statusMsg) {
+            console.log("Elemento statusMsg encontrado!"); // Se isso não aparecer no F12, o ID está errado
+            if (lucroCobertura >= (valorX - stakeTotal)) {
+                statusMsg.className = "alert alert-success mb-0";
+                statusMsg.innerHTML = "<strong>Operação Vantajosa!</strong> Supera a casa ✅";
+            } else {
+                statusMsg.className = "alert alert-warning mb-0";
+                statusMsg.innerHTML = "<strong>Ineficiente:</strong> Abaixo da casa ❌";
+            }
+        } else {
+            console.error("ERRO: Elemento 'statusMensagem' não encontrado no HTML!");
+        }
+    }
