@@ -1,0 +1,85 @@
+/**
+ * HedgeBet - Identidade Visual e Estilização Customizada
+ * Arquivo: public/css/style.css
+ */
+
+/* Variáveis de cores para consistência */
+:root {
+    --bg-main: #f8fafc;
+    --navy-dark: #0f172a;
+    --navy-medium: #1e293b;
+    --green-profit: #10b981;
+    --green-bg: #f0fdf4;
+    --blue-hedge: #3b82f6;
+    --blue-bg: #eff6ff;
+}
+
+body {
+    background-color: var(--bg-main);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #334155;
+}
+
+/* Customização do Topo / Navbar */
+.navbar {
+    background-color: var(--navy-dark) !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.navbar-brand {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+/* Cards Principais */
+.card {
+    border: none;
+    border-radius: 10px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.card-header {
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: 600;
+}
+
+/* Botões de Ajuste de Stake (+ e -) */
+.btn-adjust {
+    width: 50px;
+    height: 50px;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease-in-out;
+}
+.btn-adjust:active {
+    transform: scale(0.9);
+}
+
+/* Cards de Resultado do Simulador (Hedge Ativo) */
+.result-card {
+    border-left: 6px solid var(--navy-medium);
+    border-radius: 8px;
+    background-color: #fff;
+}
+.result-card.profit-active {
+    border-left-color: var(--green-profit);
+    background-color: var(--green-bg);
+}
+.result-card.hedge-active {
+    border-left-color: var(--blue-hedge);
+    background-color: var(--blue-bg);
+}
+
+/* Cartões de Métricas do Dashboard */
+.metric-card {
+    border-left: 4px solid #cbd5e1;
+}
+.metric-card-success { border-left-color: var(--green-profit); }
+.metric-card-primary { border-left-color: var(--blue-hedge); }
+.metric-card-warning { border-left-color: #f59e0b; }
+
+/* Animação simples para alertas */
+.alert {
+    border: none;
+    border-radius: 8px;
+}
